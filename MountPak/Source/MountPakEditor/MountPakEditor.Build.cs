@@ -43,7 +43,8 @@ public class MountPakEditor : ModuleRules
 				"Slate",
 				"SlateCore",
 				"PakFile",
-				"DeveloperSettings"
+				"DeveloperSettings",
+				"InputCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MountPakEditor.h"
-#include "Slate/SGeneratePak.h"
+#include "Slate/SGeneraatePakTab.h"
 #include "ToolMenus.h"
 
 #define LOCTEXT_NAMESPACE "FMMountPakEditorModule"
@@ -52,11 +52,7 @@ void FMountPakEditorModule::PluginButtonClicked()
 
 TSharedRef<SDockTab> FMountPakEditorModule::OnSpawnPluginTab(const FSpawnTabArgs& Args)
 {
-	return SNew(SDockTab)
-		.TabRole(ETabRole::NomadTab)
-		[
-			SNew(SGeneratePak)
-		];
+	return SNew(SGeneratePakTab);
 }
 
 #undef LOCTEXT_NAMESPACE

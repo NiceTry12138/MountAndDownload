@@ -3,14 +3,23 @@
 
 #include "Slate/SGeneratePak.h"
 #include "DesktopPlatformModule.h"
+#include "Slate/SAddedPakList.h"
+#include "Tool/GenerateToolLibrary.h"
 
 int64 SGeneratePak::GeneratePakID = 0;
 
 void SGeneratePak::Construct(const FArguments& InArgs)
 {
+	OnGenerateAllPak = InArgs._OnGenerateAllPak;
+	
 	SetOrientation(Orient_Vertical);
 	InitWidget();
 	InitData();
+}
+
+const TArray<FGeneratePakItemData>& SGeneratePak::GetAllGenereateDatas() const
+{
+	return GeneratePakLists;
 }
 
 TSharedRef<SVerticalBox> SGeneratePak::CreatePakItemConfigSlate()
@@ -115,21 +124,13 @@ TSharedRef<SVerticalBox> SGeneratePak::CreatePakItemConfigSlate()
 
 void SGeneratePak::InitData()
 {
-	// // 直接定位到 Cooked 文件夹
-	// LastInputDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Cooked"));
-	// LastInputDirectory = FPaths::ConvertRelativePathToFull(LastInputDirectory);
-	// if (TxtInputDirectory.IsValid())
-	// {
-	// 	TxtInputDirectory->SetText(FText::FromString(LastInputDirectory));
-	// }
-	//
-	// // 直接定位到 Cooked 文件夹
-	// LastOutputDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("MountPak"));
-	// LastOutputDirectory = FPaths::ConvertRelativePathToFull(LastOutputDirectory);
-	// if (TxtOutputDirectory.IsValid())
-	// {
-	// 	TxtOutputDirectory->SetText(FText::FromString(LastOutputDirectory));
-	// }
+	// 直接定位到 Cooked 文件夹
+	LastInputDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Cooked"));
+	LastInputDirectory = FPaths::ConvertRelativePathToFull(LastInputDirectory);
+
+	// 直接定位到 Cooked 文件夹
+	LastOutputDirectory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("MountPak"));
+	LastOutputDirectory = FPaths::ConvertRelativePathToFull(LastOutputDirectory);
 	
 }
 
@@ -181,7 +182,16 @@ void SGeneratePak::InitWidget()
 			]
 		];
 
-	// 添加显示按钮
+	// 添加显示用的 ListView
+	AddedPakList = SNew(SAddedPakList).OnItemDataDelete(this, &SGeneratePak::OnDeleteItemClicked);
+	
+	AddSlot()
+	.FillSize(1.0f)
+	.HAlign(HAlign_Fill)
+	.VAlign(VAlign_Fill)
+	[
+		AddedPakList.ToSharedRef()
+	];
 
 
 	// 添加生成按钮
@@ -208,7 +218,7 @@ bool SGeneratePak::CheckItemData(const FGeneratePakItemData& ItemData)
 	for (const auto& AddedItem : GeneratePakLists)
 	{
 		FString AddedSaveFile = FPaths::Combine(AddedItem.SaveDirectory, AddedItem.SaveFileName);
-		if (InItemSaveFile.Equals(InItemSaveFile))
+		if (InItemSaveFile.Equals(AddedSaveFile))
 		{
 			FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(TEXT("已经有相同 输出路径+文件名 的配置存在，请检查后重新添加")));
 			return false;
@@ -216,6 +226,25 @@ bool SGeneratePak::CheckItemData(const FGeneratePakItemData& ItemData)
 	}
 	
 	return true;
+}
+
+void SGeneratePak::DeletePakItemData(int InItemId)
+{
+	int DelIndex = -1;
+	for (int Index = 0; Index < GeneratePakLists.Num(); Index++)
+	{
+		if (GeneratePakLists[Index].ItemID == InItemId)
+		{
+			DelIndex = Index;
+			break;
+		}
+	}
+	if (DelIndex < 0 || DelIndex >= GeneratePakLists.Num())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Can't Delete PakItemData With Id = %d"), InItemId);
+		return;
+	}
+	GeneratePakLists.RemoveAt(DelIndex);
 }
 
 FReply SGeneratePak::OnInputDirectoryButtonClicked()
@@ -242,12 +271,6 @@ FReply SGeneratePak::OnInputDirectoryButtonClicked()
 	}
 	
 	TxtInputDirectory->SetText(FText::FromString(OutFolderName));
-
-	// LastInputDirectory = OutFolderName;
-	// if (TxtInputDirectory.IsValid())
-	// {
-	// 	TxtInputDirectory->SetText(FText::FromString(LastInputDirectory));
-	// }
 	
 	return FReply::Handled();
 }
@@ -279,12 +302,6 @@ FReply SGeneratePak::OnOutputDirectoryButtonClicked()
 
 	TxtOutputDirectory->SetText(FText::FromString(OutFolderName));
 	
-	// LastOutputDirectory = OutFolderName;
-	// if (TxtOutputDirectory.IsValid())
-	// {
-	// 	TxtOutputDirectory->SetText(FText::FromString(LastOutputDirectory));
-	// }
-	
 	return FReply::Handled();
 }
 
@@ -307,21 +324,36 @@ FReply SGeneratePak::OnAddSpawnListButtonClicked()
 		return FReply::Handled();
 	}
 
-	if (InData.SaveFileName.EndsWith(TEXT(".pak")))
+	if (!InData.SaveFileName.EndsWith(TEXT(".pak")))
 	{
 		InData.SaveFileName += TEXT(".pak");
 	}
 
 	GeneratePakLists.Add(InData);
+	AddedPakList->Refresh(GeneratePakLists);
 
 	TxtInputDirectory->SetText(FText::GetEmpty());
 	TxtOutputDirectory->SetText(FText::GetEmpty());
 	TxtPakFileName->SetText(FText::GetEmpty());
+
+	// 方便文件夹选择
+	LastInputDirectory = InputFileDirectory;
+	LastOutputDirectory = OutputFileDirectory;
 	
 	return FReply::Handled();
 }
 
-FReply SGeneratePak::OnGenerateAllButtonClicked()
+FReply SGeneratePak::OnGenerateAllButtonClicked() const
 {
+	if (OnGenerateAllPak.IsBound())
+	{
+		OnGenerateAllPak.Execute();
+	}
 	return FReply::Handled();
+}
+
+void SGeneratePak::OnDeleteItemClicked(int InItemId)
+{
+	DeletePakItemData(InItemId);
+	AddedPakList->Refresh(GeneratePakLists);
 }

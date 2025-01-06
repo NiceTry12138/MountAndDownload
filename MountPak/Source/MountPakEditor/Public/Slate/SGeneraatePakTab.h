@@ -3,11 +3,51 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "GeneratePakData.h"
+
+class SGeneratePak;
+class SOverlay;
+class FMonitoredProcess;
 
 /**
  * 
  */
-class MOUNTPAKEDITOR_API SGeneraatePakTab
+class MOUNTPAKEDITOR_API SGeneratePakTab : public SDockTab
 {
 public:
+	SLATE_BEGIN_ARGS(SGeneratePakTab)
+	{
+	}
+	SLATE_END_ARGS()
+
+	virtual void Construct(const FArguments& InArgs);
+	virtual ~SGeneratePakTab();
+
+protected:
+	void InitData();
+	void InitWidget();
+	
+	void StartGenerate();
+	void FinishGenerate();
+
+protected:
+	void OnGenerate();
+	
+	void HandleGenerateProcessCanceled();
+	void HandleGenerateProcessCompleted(int32 ReturnCode);
+	static void HandleGenerateProcessOutput(FString Output);
+
+	void Tick(float DeltaTime);
+private:
+	TSharedPtr<SGeneratePak> MainGeneratePak;
+	TSharedPtr<SOverlay> MainOverlay;
+
+private:
+	FString UnrealPakPath;
+	bool bIsRunning = false;
+
+	TSharedPtr<FMonitoredProcess> GeneratePakProcess;
+	TArray<FGeneratePakItemData> WaitGeneratePakDatas;
+	int32 WaitGenerateIndex = 0;
 };
