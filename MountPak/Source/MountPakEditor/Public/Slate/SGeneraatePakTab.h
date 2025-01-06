@@ -47,7 +47,8 @@ private:
 	FString UnrealPakPath;
 	bool bIsRunning = false;
 
-	TSharedPtr<FMonitoredProcess> GeneratePakProcess;
-	TArray<FGeneratePakItemData> WaitGeneratePakDatas;
-	int32 WaitGenerateIndex = 0;
+	TSharedPtr<FMonitoredProcess> GeneratePakProcess;		// UnrealPak 进程
+	TArray<FGeneratePakItemData> WaitGeneratePakDatas;		// 数据源
+	TArray<int> GeneratedIndex;								// 已经处理过的 Index 集合
+	int32 WaitGenerateIndex = 0;							// 待处理的序号集合
 };

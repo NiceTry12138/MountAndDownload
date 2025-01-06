@@ -215,13 +215,26 @@ bool SGeneratePak::CheckItemData(const FGeneratePakItemData& ItemData)
 	}
 
 	FString InItemSaveFile = FPaths::Combine(ItemData.SaveDirectory, ItemData.SaveFileName);
+	if (!InItemSaveFile.EndsWith(TEXT(".pak")))
+	{
+		InItemSaveFile += TEXT(".pak");
+	}
+	
 	for (const auto& AddedItem : GeneratePakLists)
 	{
 		FString AddedSaveFile = FPaths::Combine(AddedItem.SaveDirectory, AddedItem.SaveFileName);
 		if (InItemSaveFile.Equals(AddedSaveFile))
 		{
-			FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(TEXT("已经有相同 输出路径+文件名 的配置存在，请检查后重新添加")));
-			return false;
+			EAppReturnType::Type Result = FMessageDialog::Open(EAppMsgType::YesNo, FText::FromString(TEXT("已经有相同 输出路径+文件名 的配置存在，是否仍然添加？\r\n如果选择是，则将把多个输入路径下的文件打包到同一个 pak 文件中")));
+			if (Result == EAppReturnType::No)
+			{
+				return false;
+			}
+			else
+			{
+				// 既然已经确定添加 那么直接全部跳过检查了 万一 100 个重复的项 要点 100 次确定 有点恶心
+				return true;
+			}
 		}
 	}
 	

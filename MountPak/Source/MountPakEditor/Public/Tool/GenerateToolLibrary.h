@@ -17,5 +17,5 @@ public:
 	 * @param bCompress 是否压缩
 	 * @return 生成的 txt 配置文件的路径
 	 */
-	static FString GeneratePakConfigTxt(const FString& PakFileName, const FString& InputDirect, bool bCompress);
+	static FString GeneratePakConfigTxt(const FString& PakFileName, const TArray<FString>& InputDirects, bool bCompress);
 };

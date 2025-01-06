@@ -71,8 +71,37 @@ void SGeneratePakTab::InitWidget()
 
 void SGeneratePakTab::StartGenerate()
 {
+	// 跳过已经添加过的序号
+	while (GeneratedIndex.Contains(WaitGenerateIndex))
+	{
+		++WaitGenerateIndex;
+	}
+
+	// 如果序号超过数组长度 表示无需操作
+	if (WaitGenerateIndex >= WaitGeneratePakDatas.Num())
+	{
+		FinishGenerate();
+		return;
+	}
+	
 	auto Data = WaitGeneratePakDatas[WaitGenerateIndex];
-	FString TxtPath = GenerateToolLibrary::GeneratePakConfigTxt(Data.SaveFileName, Data.InDirectory, Data.bIsCompress);
+	GeneratedIndex.Add(WaitGenerateIndex);
+
+	TArray<FString> InDirectories;
+	InDirectories.Add(Data.InDirectory);
+
+	// 检索所有输出路径和保存 pak 文件名相同的配置，将这些配置到 InDirectory 中所有的文件都保存到同一个 pak 文件中
+	for (int Index = WaitGenerateIndex + 1; Index < WaitGeneratePakDatas.Num(); ++Index)
+	{
+		auto& TempData = WaitGeneratePakDatas[Index];
+		if (TempData.SaveFileName == Data.SaveFileName && TempData.SaveDirectory == Data.SaveDirectory)
+		{
+			InDirectories.Add(TempData.InDirectory);
+			GeneratedIndex.Add(Index);
+		}
+	}
+	
+	FString TxtPath = GenerateToolLibrary::GeneratePakConfigTxt(Data.SaveFileName, InDirectories, Data.bIsCompress);
 	FString SavePath = FPaths::Combine(Data.SaveDirectory, Data.SaveFileName);
 
 	FString Params = SavePath + TEXT(" -create=") + TxtPath;
@@ -93,6 +122,7 @@ void SGeneratePakTab::FinishGenerate()
 	WaitGenerateIndex = 0;
 	WaitGeneratePakDatas.Empty();
 	GeneratePakProcess.Reset();
+	GeneratedIndex.Empty();
 }
 
 void SGeneratePakTab::OnGenerate()
@@ -106,6 +136,7 @@ void SGeneratePakTab::OnGenerate()
 	// GeneratePakProcess = MakeShared<FMonitoredProcess>(UnrealPakPath)
 	
 	WaitGeneratePakDatas = MainGeneratePak->GetAllGenereateDatas();
+	GeneratedIndex.Empty();
 	WaitGenerateIndex = 0;
 
 	bIsRunning = true;
