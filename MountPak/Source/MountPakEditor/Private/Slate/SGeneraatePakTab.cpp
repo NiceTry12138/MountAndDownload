@@ -159,6 +159,8 @@ void SGeneratePakTab::HandleGenerateProcessCompleted(int32 ReturnCode)
 	}
 	
 	GeneratePakProcess.Reset();
+
+	// 不可直接在这里 StartGenerate 因为此时 GeneratePakProcess 仍然是 Running 状态，所以 GeneratePakProcess.Reset() 得等到下一帧才能释放完毕
 }
 
 void SGeneratePakTab::HandleGenerateProcessOutput(FString Output)
