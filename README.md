@@ -156,7 +156,126 @@ FCoreDelegates::OnFEngineLoopInitComplete.AddRaw(this, &FPakPlatformFile::Optimi
 
 `HttpDownLoadTool` 插件用于下载指定网络路径下的文件，支持断点续传
 
+### 思路
+
+需要下载的文件可能是一个非常大的文件，比如 CG 动画、Cooked 之后的资源包 等等。这种大文件如果单独使用一个 Http 请求下载，如果出现网络波动导致文件下载失败，重新下载的代价是非常巨大的
+
+想要解决这个问题，可以直接每次下载文件的一部分，比如以 1M 为单位，每次下载 1M，最后将所有下载的文件合并成一个真正的文件即可
+
+
+### 关于分段下载
+
 对于服务来说要求支持 `Range`
 
+关于 `Range`，这个是 HTTP 提供的一个请求头，要求服务器仅回传 HTTP 消息的一部分。范围请求对于支持随机访问的媒体播放器、明确只需要大型文件莫部分的数据处理工具，以及允许用户暂停及恢复下载的下载管理器等客户端尤其有用
+
+> MDN 关于 HTTP 范围请求的说明 `https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Range_requests`
+
+也就是说如果需要断点续传，这个 `Range` 的使用尤其重要
+
+`curl http://i.imgur.com/z4d4kWk.jpg -i -H "Range: bytes=0-1023"` 以这段命令为例，在请求头中设置了 `Range` 值为 `bytes=0-1023` 表示请求 `z4d4kWk.jpg` 这个文件的前 1024 个字节的内容
+
+> 支持多段请求 `Range: bytes=0-50, 100-150`
+
 可以使用 `npm install http-server` 来快速安装一个支持 `Range` 的简易 `Http` 请求文件的  `http-server` 库，然后通过 `npx http-server -p 8001` 来启动这个库，指定端口为 `8001`， 也就是可以通过 `http://127.0.0.1:8001` 来访问这个库
+
+也可以使用 `Nginx` 作为静态资源服务器，只需要在配置文件中添加 `add_header Accept-Ranges bytes;` 即可支持 `Range`
+
+![](Image/004.png)
+
+### 关于下载
+
+为了分段下载，首先得知道需要下载的文件的大小，知道大小才能根据文件大小和每次下载的数据量，来拆分不同的 `Request` 请求
+
+可以指定请求类型为 `HEAD` 来获取指定 `URL` 文件的一些头信息
+
+```cpp
+FileSizeRequest = FHttpModule::Get().CreateRequest();
+if (FileSizeRequest)
+{
+	FileSizeRequest->SetURL(URL);
+	FileSizeRequest->SetVerb(TEXT("HEAD"));
+	// https://blog.csdn.net/lotluck/article/details/78486279
+	// HTTP中的Range就是分段请求字节数 Range: bytes=0-0 可以探测获取文件大小
+	// FileSizeRequest->SetHeader(TEXT("Range"), TEXT("bytes=0-0"));
+	FileSizeRequest->OnProcessRequestComplete().BindUObject(this, &UAsyncDownloadFile::ReponseFileSize);
+	FileSizeRequest->ProcessRequest();
+}
+```
+
+在 `Response` 中，返回头中有一个名为 `Content-Length` 的头，存储着文件大小信息
+
+```cpp
+FString RangeStr = HttpResponse->GetHeader("Content-Length");
+```
+
+然后根据文件大小、每次大小的大小，拆分成多个任务
+
+```cpp
+while (StartSize < TotalFileSize)
+{
+	// 创建子任务
+	int64 TempSize = 0;
+
+	FString TempRange;
+	if (StartSize + TaskSize <= TotalFileSize)
+	{
+		TempSize = TaskSize;
+		TempRange = FString::Printf(TEXT("bytes=%lld-%lld"), StartSize, StartSize + TempSize - 1);
+	}
+	else
+	{
+		TempSize = TotalFileSize - StartSize;
+		TempRange = FString::Printf(TEXT("bytes=%lld-"), StartSize);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT(" \r\n \t Download SubTask \t TaskId = %lld, TaskRange = %s, Size = %lld, URL = %s"), TaskID, *TempRange, TempSize, *URL);
+	
+    // 创建下载任务，设置下载链接、大小、请求头信息
+	
+	StartSize += TempSize;
+	++TaskID;
+}
+```
+
+通过 Unreal 原生支持的 http 请求，配合 `Range`，即可从 `Response` 获取下载的指定大小的文件内容
+
+为了解决下载文件重名问题，可以使用下载链接生成唯一的 md5 码，然后以 md5 码作为下载文件的文件名
+
+比如下载链接是 `http://127.0.0.1/downloadfile.mp4`，通过下载链接可以生成唯一的 md5 码，然后以 md5 码作为下载的文件 ID，可以避免下载到不同网址但是同名的文件进而导致 Bug
+
+```cpp
+FString MD5Hash = FMD5::HashAnsiString(Url)
+```
+
+可以一次起多个 `Request` 来加快下载速度，给每个 `Request` 指定不同的 `Range`
+
+```cpp
+RequestPtr = FHttpModule::Get().CreateRequest();
+RequestPtr->SetURL(URL);
+RequestPtr->SetVerb(TEXT("GET"));
+RequestPtr->SetHeader(TEXT("Range"), Range);
+```
+
+### 关于断点续传
+
+![](Image/007.png)
+
+以一个 44M 的 PDF 为例
+
+下载路径为 `http://127.0.0.1:8080/download.pdf`，大小 44M，每个下载请求为 1M，共计出现 44 个下载任务
+
+每个下载任务设置下载 ID， ID 从 0 开始，也就是说 ID 的值是 0 ~ 43 
+
+根据 `http://127.0.0.1:8080/download.pdf` 生成 MD5 为 `849ed761b73f37586031bb270b1eb6e0`，那么每个下载任务下载的片段为 `849ed761b73f37586031bb270b1eb6e0_37` + ID + `.hcf`
+
+> `.hcf` 下载后缀自定义，意义不大
+
+![](Image/005.png)
+
+最后得到的结果就是上图所示的内容，总共创建了 44 个 `hcf` 文件，和一个合并得到的 `download.pdf` 文件
+
+![](Image/006.png)
+
+如果中途退出游戏，那么下次重新请求的时候，可以先判断 `.hcf` **文件是否存在**，比如 `849ed761b73f37586031bb270b1eb6e0_4.hcf` 文件存在，则表示 ID = 4 的下载任务已经完成，无需再次发出 HTTP 请求了
 
