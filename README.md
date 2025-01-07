@@ -81,7 +81,7 @@ FDesktopPlatformModule::Get()->OpenDirectoryDialog( FSlateApplication::Get().Fin
 
 由于一般来说是将 `Cooked` 之后的资产进行打包，所以需要先 `Cooked Content`，因此在点击 **选择输入文件夹** 按钮的时候先检查是否存在 `Saved/Cooked` 文件夹
 
-另外，如何存在多个相同**输出路径**和保存**文件名**的配置项，我认为是将多个**输入路径**下所有的资产都保存到同一个 Pak 文件中
+另外，如果存在多个相同**输出路径**和保存**文件名**的配置项，我认为是将多个**输入路径**下所有的资产都保存到同一个 Pak 文件中
 
 ![](Image/003.png)
 
