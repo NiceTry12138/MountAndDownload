@@ -271,7 +271,7 @@ FReply SGeneratePak::OnInputDirectoryButtonClicked()
 	}
 
 	// 默认保存 Pak 文件的文件夹
-	if (!FPaths::DirectoryExists(LastOutputDirectory))
+	if (!FPaths::DirectoryExists(LastInputDirectory))
 	{
 		// 如果文件夹不存在表示没有 Cook Content 文件
 		FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(TEXT("未找到 Saved/Cooked 文件夹，请先 Cook 资产到指定平台")));
